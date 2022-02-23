@@ -30,6 +30,7 @@
 
 """Unit test for the gtest_json_output module."""
 
+
 import datetime
 import errno
 import json
@@ -51,11 +52,7 @@ NO_STACKTRACE_SUPPORT_FLAG = '--no_stacktrace_support'
 
 SUPPORTS_STACK_TRACES = NO_STACKTRACE_SUPPORT_FLAG not in sys.argv
 
-if SUPPORTS_STACK_TRACES:
-  STACK_TRACE_TEMPLATE = '\nStack trace:\n*'
-else:
-  STACK_TRACE_TEMPLATE = ''
-
+STACK_TRACE_TEMPLATE = '\nStack trace:\n*' if SUPPORTS_STACK_TRACES else ''
 EXPECTED_NON_EMPTY = {
     u'tests':
         26,
@@ -754,7 +751,7 @@ class GTestJsonOutputUnitTest(gtest_test_utils.TestCase):
     """
 
     json_path = os.path.join(gtest_test_utils.GetTempDir(),
-                             GTEST_PROGRAM_NAME + 'out.json')
+                             f'{GTEST_PROGRAM_NAME}out.json')
     if os.path.isfile(json_path):
       os.remove(json_path)
 
@@ -797,7 +794,7 @@ class GTestJsonOutputUnitTest(gtest_test_utils.TestCase):
       expected_exit_code: program's exit code.
     """
     json_path = os.path.join(gtest_test_utils.GetTempDir(),
-                             gtest_prog_name + 'out.json')
+                             f'{gtest_prog_name}out.json')
     gtest_prog_path = gtest_test_utils.GetTestExecutablePath(gtest_prog_name)
 
     command = (

@@ -157,9 +157,7 @@ class Include(Node):
     self.system = system
 
   def __str__(self):
-    fmt = '"%s"'
-    if self.system:
-      fmt = '<%s>'
+    fmt = '<%s>' if self.system else '"%s"'
     return self._StringHelper(self.__class__.__name__, fmt % self.filename)
 
 
@@ -261,7 +259,7 @@ class VariableDeclaration(_GenericDeclaration):
     """Return a string that tries to reconstitute the variable decl."""
     suffix = '%s %s' % (self.type, self.name)
     if self.initial_value:
-      suffix += ' = ' + self.initial_value
+      suffix += f' = {self.initial_value}'
     return suffix
 
   def __str__(self):
@@ -282,10 +280,7 @@ class Typedef(_GenericDeclaration):
   def Requires(self, node):
     # TODO(nnorwitz): handle namespaces, etc.
     name = node.name
-    for token in self.alias:
-      if token is not None and name == token.name:
-        return True
-    return False
+    return any(token is not None and name == token.name for token in self.alias)
 
   def __str__(self):
     suffix = '%s, %s' % (self.name, self.alias)
@@ -426,9 +421,7 @@ class Type(_GenericDeclaration):
     self.array = array
 
   def __str__(self):
-    prefix = ''
-    if self.modifiers:
-      prefix = ' '.join(self.modifiers) + ' '
+    prefix = ' '.join(self.modifiers) + ' ' if self.modifiers else ''
     name = str(self.name)
     if self.templated_types:
       name += '<%s>' % self.templated_types
@@ -546,13 +539,7 @@ class TypeConverter(object):
           parts = parts[:i-1]
           break
       else:
-        if parts[-1].token_type == tokenize.NAME:
-          name = parts.pop().name
-        else:
-          # TODO(nnorwitz): this is a hack that happens for code like
-          # Register(Foo<T>); where it thinks this is a function call
-          # but it's actually a declaration.
-          name = '???'
+        name = parts.pop().name if parts[-1].token_type == tokenize.NAME else '???'
     modifiers = []
     type_name = []
     other_tokens = []
@@ -757,7 +744,7 @@ class AstBuilder(object):
           if next.name != 'class':
             self._AddBackToken(next)
 
-        method = getattr(self, 'handle_' + token.name)
+        method = getattr(self, f'handle_{token.name}')
         return method()
       elif token.name == self.in_class_name_only:
         # The token name is the same as the class, must be a ctor if
@@ -815,7 +802,7 @@ class AstBuilder(object):
         self._AddBackTokens(temp_tokens[1:])
         self._AddBackToken(last_token)
         method_name = temp_tokens[0].name
-        method = getattr(self, 'handle_' + method_name, None)
+        method = getattr(self, f'handle_{method_name}', None)
         if not method:
           # Must be declaring a variable.
           # TODO(nnorwitz): handle the declaration.
@@ -1081,7 +1068,7 @@ class AstBuilder(object):
     # Handle ctor initializers.
     if token.name == ':':
       # TODO(nnorwitz): anything else to handle for initializer list?
-      while token.name != ';' and token.name != '{':
+      while token.name not in [';', '{']:
         token = self._GetNextToken()
 
     # Handle pointer to functions that are really data but look
@@ -1123,17 +1110,14 @@ class AstBuilder(object):
       if token.name == '=':
         token = self._GetNextToken()
 
-        if token.name == 'default' or token.name == 'delete':
-          # Ignore explicitly defaulted and deleted special members
-          # in C++11.
-          token = self._GetNextToken()
-        else:
+        if token.name not in ['default', 'delete']:
           # Handle pure-virtual declarations.
           assert token.token_type == tokenize.CONSTANT, token
           assert token.name == '0', token
           modifiers |= FUNCTION_PURE_VIRTUAL
-          token = self._GetNextToken()
-
+        # Ignore explicitly defaulted and deleted special members
+        # in C++11.
+        token = self._GetNextToken()
       if token.name == '[':
         # TODO(nnorwitz): store tokens and improve parsing.
         # template <typename T, size_t N> char (&ASH(T (&seq)[N]))[N];
@@ -1154,18 +1138,7 @@ class AstBuilder(object):
                     self.namespace_stack)
 
   def _GetReturnTypeAndClassName(self, token_seq):
-    # Splitting the return type from the class name in a method
-    # can be tricky.  For example, Return::Type::Is::Hard::To::Find().
-    # Where is the return type and where is the class name?
-    # The heuristic used is to pull the last name as the class name.
-    # This includes all the templated type info.
-    # TODO(nnorwitz): if there is only One name like in the
-    # example above, punt and assume the last bit is the class name.
-
-    # Ignore a :: prefix, if exists so we can find the first real name.
-    i = 0
-    if token_seq[0].name == '::':
-      i = 1
+    i = 1 if token_seq[0].name == '::' else 0
     # Ignore a :: suffix, if exists.
     end = len(token_seq) - 1
     if token_seq[end-1].name == '::':
@@ -1231,11 +1204,8 @@ class AstBuilder(object):
     pass
 
   def _GetNestedType(self, ctor):
-    name = None
     name_tokens, token = self.GetName()
-    if name_tokens:
-      name = ''.join([t.name for t in name_tokens])
-
+    name = ''.join([t.name for t in name_tokens]) if name_tokens else None
     # Handle forward declarations.
     if token.token_type == tokenize.SYNTAX and token.name == ';':
       return ctor(token.start, token.end, name, None,
@@ -1392,7 +1362,7 @@ class AstBuilder(object):
     if (token.token_type == tokenize.NAME and
             keywords.IsKeyword(token.name)):
       # Token must be struct/enum/union/class.
-      method = getattr(self, 'handle_' + token.name)
+      method = getattr(self, f'handle_{token.name}')
       self._handling_typedef = True
       tokens = [method()]
       self._handling_typedef = False
@@ -1450,12 +1420,11 @@ class AstBuilder(object):
           assert i < len_tokens, '%s %s' % (i, tokens)
           default, unused_next_token = self.GetName(tokens[i:])
           i += len(default)
-        else:
-          if tokens[i-1].name != ',':
-            # We got something like: Type variable.
-            # Re-adjust the key (variable) and type_name (Type).
-            key = tokens[i-1].name
-            type_name = tokens[i-2]
+        elif tokens[i-1].name != ',':
+          # We got something like: Type variable.
+          # Re-adjust the key (variable) and type_name (Type).
+          key = tokens[i-1].name
+          type_name = tokens[i-2]
 
       result[key] = (type_name, default)
     return result
@@ -1512,9 +1481,6 @@ class AstBuilder(object):
         token = self._GetNextToken()
         if token.name != 'virtual':
           self._AddBackToken(token)
-        else:
-          # TODO(nnorwitz): store that we got virtual for this base.
-          pass
       base, next_token = self.GetName()
       bases_ast = self.converter.ToType(base)
       assert len(bases_ast) == 1, bases_ast
