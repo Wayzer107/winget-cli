@@ -92,7 +92,7 @@ def RunAndReturnOutput(test_suite=None, fail_fast=None, run_disabled=False):
   args = []
   xml_path = os.path.join(gtest_test_utils.GetTempDir(),
                           '.GTestFailFastUnitTest.xml')
-  args += ['--gtest_output=xml:' + xml_path]
+  args += [f'--gtest_output=xml:{xml_path}']
   if fail_fast is not None:
     if isinstance(fail_fast, str):
       args += ['--%s=%s' % (FAIL_FAST_FLAG, fail_fast)]

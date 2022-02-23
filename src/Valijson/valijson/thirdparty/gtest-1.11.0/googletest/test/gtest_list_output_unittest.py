@@ -245,7 +245,7 @@ class GTestListTestsOutputUnitTest(gtest_test_utils.TestCase):
 
   def _GetOutput(self, out_format):
     file_path = os.path.join(gtest_test_utils.GetTempDir(),
-                             'test_out.' + out_format)
+                             f'test_out.{out_format}')
     gtest_prog_path = gtest_test_utils.GetTestExecutablePath(
         'gtest_list_output_unittest_')
 
@@ -269,8 +269,7 @@ class GTestListTestsOutputUnitTest(gtest_test_utils.TestCase):
     actual = self._GetOutput(test_format)
     actual_lines = actual.splitlines()
     expected_lines = expected_output.splitlines()
-    line_count = 0
-    for actual_line in actual_lines:
+    for line_count, actual_line in enumerate(actual_lines):
       expected_line = expected_lines[line_count]
       expected_line_re = re.compile(expected_line.strip())
       self.assertTrue(
@@ -278,7 +277,6 @@ class GTestListTestsOutputUnitTest(gtest_test_utils.TestCase):
           ('actual output of "%s",\n'
            'which does not match expected regex of "%s"\n'
            'on line %d' % (actual, expected_output, line_count)))
-      line_count = line_count + 1
 
 
 if __name__ == '__main__':

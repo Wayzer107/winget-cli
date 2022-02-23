@@ -143,11 +143,10 @@ def FuseGMockH(gmock_root, output_dir):
 
     with open(os.path.join(gmock_root, gmock_header_path), 'r') as fh:
       for line in fh:
-        m = INCLUDE_GMOCK_FILE_REGEX.match(line)
-        if m:
+        if m := INCLUDE_GMOCK_FILE_REGEX.match(line):
           # '#include "gmock/..."'
           # - let's process it recursively.
-          ProcessFile('include/' + m.group(1))
+          ProcessFile(f'include/{m.group(1)}')
         else:
           m = gtest.INCLUDE_GTEST_FILE_REGEX.match(line)
           if m:
@@ -199,15 +198,8 @@ def FuseGMockAllCcToFile(gmock_root, output_file):
             output_file.write('#include "%s"\n' % (GMOCK_H_OUTPUT,))
         else:
           m = gtest.INCLUDE_GTEST_FILE_REGEX.match(line)
-          if m:
-            # '#include "gtest/..."'
-            # There is no need to #include gtest.h as it has been
-            # #included by gtest-all.cc.
-
-            pass
-          else:
-            m = gtest.INCLUDE_SRC_FILE_REGEX.match(line)
-            if m:
+          if not m:
+            if m := gtest.INCLUDE_SRC_FILE_REGEX.match(line):
               # It's '#include "src/foo"' - let's process it recursively.
               ProcessFile(m.group(1))
             else:
